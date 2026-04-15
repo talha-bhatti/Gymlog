@@ -594,6 +594,67 @@
     .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
     .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
     .empty-state p { font-size: 14px; line-height: 1.6; }
+
+    /* ONBOARDING */
+    .onboarding-overlay {
+      position: fixed; inset: 0; background: var(--bg); z-index: 500;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: calc(60px + var(--safe-top)) 32px calc(40px + var(--safe-bottom));
+    }
+    .onboarding-overlay.hidden { display: none; }
+    .onboarding-logo { font-family: 'Bebas Neue', sans-serif; font-size: 52px; letter-spacing: 4px; color: var(--accent); margin-bottom: 8px; }
+    .onboarding-tagline { font-size: 14px; color: var(--muted); margin-bottom: 56px; text-align: center; }
+    .onboarding-question { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 1px; margin-bottom: 20px; text-align: center; line-height: 1.2; }
+    .name-input {
+      width: 100%; background: var(--surface); border: 2px solid var(--border);
+      border-radius: 14px; color: var(--text); padding: 18px 20px;
+      font-family: 'DM Sans', sans-serif; font-size: 20px; font-weight: 500;
+      text-align: center; margin-bottom: 20px; outline: none; transition: border-color 0.2s;
+    }
+    .name-input:focus { border-color: var(--accent); }
+    .name-input::placeholder { color: var(--muted); }
+    .onboarding-btn {
+      width: 100%; background: var(--accent); color: #000; border: none;
+      border-radius: 14px; padding: 18px; font-family: 'Bebas Neue', sans-serif;
+      font-size: 22px; letter-spacing: 2px; cursor: pointer;
+    }
+    .onboarding-btn:active { opacity: 0.85; }
+
+    /* GREETING */
+    .greeting { font-size: 13px; color: var(--muted); padding: 8px 16px 0; font-weight: 500; }
+    .greeting span { color: var(--text); font-weight: 600; }
+
+    /* DELETE CONFIRM SHEET */
+    .confirm-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+      z-index: 400; display: none; align-items: flex-end;
+    }
+    .confirm-overlay.open { display: flex; }
+    .confirm-sheet {
+      background: var(--surface); border-radius: 24px 24px 0 0; width: 100%;
+      padding: 24px 20px calc(24px + var(--safe-bottom)); animation: slideUp 0.25s ease;
+    }
+    .confirm-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 20px; }
+    .confirm-title { font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 1px; margin-bottom: 6px; }
+    .confirm-desc { font-size: 14px; color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
+    .confirm-desc span { color: var(--text); font-weight: 600; }
+    .delete-confirm-btn {
+      width: 100%; background: var(--red); color: #fff; border: none;
+      border-radius: 12px; padding: 16px; font-family: 'Bebas Neue', sans-serif;
+      font-size: 18px; letter-spacing: 1px; cursor: pointer; margin-bottom: 10px;
+    }
+    .cancel-btn {
+      width: 100%; background: none; border: 1px solid var(--border); color: var(--muted);
+      border-radius: 12px; padding: 14px; font-family: 'DM Sans', sans-serif;
+      font-size: 14px; font-weight: 500; cursor: pointer;
+    }
+
+    /* DELETE button on cards */
+    .delete-session-btn {
+      background: none; border: none; color: var(--muted); font-size: 18px;
+      cursor: pointer; padding: 4px 6px; flex-shrink: 0; line-height: 1; transition: color 0.15s;
+    }
+    .delete-session-btn:active { color: var(--red); }
   </style>
 </head>
 <body>
@@ -717,6 +778,29 @@
   <div id="history-content"></div>
 </div>
 
+<!-- ONBOARDING -->
+<div class="onboarding-overlay" id="onboarding">
+  <div class="onboarding-logo">GymLog</div>
+  <div class="onboarding-tagline">Your personal gym tracker</div>
+  <div class="onboarding-question">What's your name?</div>
+  <input class="name-input" id="name-input" type="text" placeholder="Enter your name" maxlength="30" />
+  <button class="onboarding-btn" onclick="saveName()">LET'S GO 💪</button>
+</div>
+
+<!-- GREETING -->
+<div class="greeting" id="greeting"></div>
+
+<!-- DELETE CONFIRM SHEET -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-sheet">
+    <div class="confirm-handle"></div>
+    <div class="confirm-title">Delete Session?</div>
+    <div class="confirm-desc" id="confirm-desc">Are you sure you want to delete this session?</div>
+    <button class="delete-confirm-btn" onclick="confirmDelete()">🗑 DELETE SESSION</button>
+    <button class="cancel-btn" onclick="closeConfirm()">Cancel</button>
+  </div>
+</div>
+
 <!-- BOTTOM NAV -->
 <nav class="nav">
   <button class="nav-btn active" onclick="showScreen('home', this)">
@@ -804,8 +888,10 @@
 <script>
 // ===== DATA =====
 const STORAGE_KEY = 'gymlog_sessions_v2';
+const NAME_KEY = 'gymlog_name';
 let sessions = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 let currentDate = new Date();
+let userName = localStorage.getItem(NAME_KEY) || '';
 
 const MUSCLE_ICONS = {
   'Chest':'🫀','Back':'🔙','Shoulders':'💪','Arms':'💪',
@@ -814,7 +900,69 @@ const MUSCLE_ICONS = {
 
 function saveSessions() { localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions)); }
 
-// ===== NAV =====
+// ===== ONBOARDING / NAME =====
+function checkOnboarding() {
+  if (!userName) {
+    document.getElementById('onboarding').classList.remove('hidden');
+    setTimeout(() => document.getElementById('name-input').focus(), 300);
+  } else {
+    document.getElementById('onboarding').classList.add('hidden');
+    showGreeting();
+  }
+}
+
+function saveName() {
+  const val = document.getElementById('name-input').value.trim();
+  if (!val) { document.getElementById('name-input').style.borderColor = 'var(--red)'; return; }
+  userName = val;
+  localStorage.setItem(NAME_KEY, userName);
+  document.getElementById('onboarding').classList.add('hidden');
+  showGreeting();
+}
+
+document.getElementById('name-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveName();
+});
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function showGreeting() {
+  const el = document.getElementById('greeting');
+  el.innerHTML = `${getGreeting()}, <span>${userName}</span> 👋`;
+}
+
+// ===== DELETE SESSION =====
+let _pendingDeleteId = null;
+
+function promptDelete(sessionTs, label, dateLabel) {
+  _pendingDeleteId = sessionTs;
+  document.getElementById('confirm-desc').innerHTML =
+    `Delete <span>${label}</span> on <span>${dateLabel}</span>? This can't be undone.`;
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+
+function confirmDelete() {
+  if (_pendingDeleteId === null) return;
+  sessions = sessions.filter(s => s.ts !== _pendingDeleteId);
+  saveSessions();
+  _pendingDeleteId = null;
+  closeConfirm();
+  renderCalendar();
+  updateStats();
+  renderRecent();
+  if (document.getElementById('screen-history').classList.contains('active')) renderHistory();
+  showToast('🗑 Session deleted');
+}
+
+function closeConfirm() {
+  _pendingDeleteId = null;
+  document.getElementById('confirm-overlay').classList.remove('open');
+}
 function showScreen(name, btn) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -1097,6 +1245,7 @@ function renderRecent() {
         ${timeStr}
       </div>
       ${s.duration ? `<div class="session-duration">${s.duration}m</div>` : ''}
+      <button class="delete-session-btn" onclick="promptDelete(${s.ts},'${label.replace(/'/g,"\\'")}','${dateLabel}')" title="Delete">🗑</button>
     </div>`;
   }).join('');
 }
@@ -1133,6 +1282,7 @@ function renderHistory() {
             ${timeStr}
           </div>
           ${s.duration ? `<div class="session-duration">${s.duration}m</div>` : ''}
+          <button class="delete-session-btn" onclick="promptDelete(${s.ts},'${label.replace(/'/g,"\\'")}','${dateLabel}')" title="Delete">🗑</button>
         </div>`;
       }).join('')}
     </div>`).join('');
@@ -1206,7 +1356,8 @@ function showToast(msg) {
 }
 
 // ===== INIT =====
-updateTimerUI();  // restore timer if app was closed mid-session
+checkOnboarding();
+updateTimerUI();
 renderCalendar();
 updateStats();
 renderRecent();
